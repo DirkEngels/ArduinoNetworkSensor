@@ -13,13 +13,16 @@
 #include <SPI.h>
 #include <Ethernet.h>
 #include "DHT.h"
+#include <SerialLCD.h>
+#include <SoftwareSerial.h>
 
-
-// Define static
+// Conf DHT
 #define DHTTYPE DHT11      // DHT 11
 #define DHTPIN A0          // what pin we're connected to
 DHT dht(DHTPIN, DHTTYPE);
 
+// Conf  LCD
+SerialLCD slcd(3,4);
 
 /**
  * Initialize variables
@@ -39,16 +42,25 @@ float stateHumidity    = 0;
  */
 void setup() {
   pinMode(7, OUTPUT);      // Green light
-    
-  // Setup serial debugging support
+
+  // Initializing display & serial debugging
+  slcd.begin();
+  slcd.backlight();
+  slcd.print("Init device");
   Serial.begin(9600);
-  Serial.println("Initializing device");
+  Serial.println("Init device");
 
   // Initalize the Ethernet connection
+  slcd.clear();
+  slcd.home();
+  slcd.print("Init ethernet");
   Serial.println("Initializing ethernet connection");
   Ethernet.begin(mac, ip);
   
   // Blinking
+  slcd.clear();
+  slcd.home();
+  slcd.print("Init LED");
   Serial.println("Starting blink sequence");
   ledSwitch( 1 );
   delay(500);
@@ -59,12 +71,22 @@ void setup() {
   ledSwitch( 0 );
   
   // Initializing DHT chip
+  slcd.clear();
+  slcd.home();
+  slcd.print("Init DHT chip");
   Serial.println("Initializing DHT chip");
   dht.begin();
 
   // Start the webserver
+  slcd.clear();
+  slcd.home();
+  slcd.print("Init server");
   Serial.println("Starting webserver");
   server.begin();
+  
+  slcd.clear();
+  slcd.home();
+  slcd.print("Starting server");
 }
 
 
@@ -89,10 +111,32 @@ void loop() {
   } else {
     stateTemperature = t;
     stateHumidity    = h;
+
+  // Dislay information on LCD
+  slcd.clear();
+  slcd.home();
+
+  
+  if (stateLed == 1) {
+    slcd.print("L:1");
+  } else {
+    slcd.print("L:0");
+  }
+
+  slcd.print(" T:");
+  lcdDisplayFloat( stateTemperature ,1);
+  slcd.print(stateTemperature);
+
+  slcd.print(" H:");
+  lcdDisplayFloat( stateHumidity ,1);
+  slcd.setCursor(0,1);
+  slcd.print("");
   }
 
   if (client) {
     // Print debug
+    slcd.setCursor(0,1);
+    slcd.print("Accepted client");
     Serial.println("Accepted client");
 
     // An http request ends with a blank line
@@ -143,6 +187,8 @@ void loop() {
 
     // close the connection:
     client.stop();
+    slcd.setCursor(0,1);
+    slcd.print("");
     Serial.println("");
   }
 
@@ -212,4 +258,42 @@ void output( EthernetClient client ) {
   client.print( stateHumidity );
   client.println(" %");
   
+}
+
+
+/**
+ * Method copied & renamed from:
+ * http://www.seeedstudio.com/wiki/GROVE_-_Starter_Kit_v1.1b
+ */
+void lcdDisplayFloat(double number, uint8_t digits) { 
+  // Handle negative numbers
+  if (number < 0.0) {
+     slcd.print('-');
+     number = -number;
+  }
+
+  // Round correctly so that slcd.print(1.999, 2) prints as "2.00"
+  double rounding = 0.5;
+  for (uint8_t i=0; i<digits; ++i) {
+    rounding /= 10.0;
+  }
+  number += rounding;
+
+  // Extract the integer part of the number and print it
+  unsigned long int_part = (unsigned long)number;
+  float remainder = number - (float)int_part;
+  slcd.print(int_part , DEC); // base DEC
+
+  // Print the decimal point, but only if there are digits beyond
+  if (digits > 0)
+    slcd.print("."); 
+
+  // Extract digits from the remainder one at a time
+  while (digits-- > 0) {
+    remainder *= 10.0;
+    float toPrint = float(remainder);
+    slcd.print(toPrint , DEC);//base DEC
+    remainder -= toPrint; 
+  }
+
 }
