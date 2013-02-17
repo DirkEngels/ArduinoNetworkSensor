@@ -12,25 +12,24 @@
  */
 #include <SPI.h>
 #include <Ethernet.h>
-#include "DHT.h"
+#include <DHT.h>
 #include <SerialLCD.h>
 #include <SoftwareSerial.h>
 
-// Conf DHT
-#define DHTTYPE DHT11      // DHT 11
+// Conf DHT chip (temperature + humidity)
+#define DHTTYPE DHT11      // What chip type (DHT 11, DHT 21)
 #define DHTPIN A0          // what pin we're connected to
 DHT dht(DHTPIN, DHTTYPE);
 
 // Conf  LCD
 SerialLCD slcd(3,4);
 
-/**
- * Initialize variables
- */
+// Conf Ethernet server
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 byte ip[] = { 192,168,2,88 };
 EthernetServer server(80);
 
+// Conf application state
 int   stateLed         = 0;
 float stateTemperature = 0;
 float stateHumidity    = 0;
@@ -38,7 +37,11 @@ float stateHumidity    = 0;
 /**
  * Setup
  * - Set output pins
- * - Load serial support
+ * - Start lcd display
+ * - Start serial support
+ * - Start DHT chip
+ * - Start Ethernet Server
+ * - Blink LED several times
  */
 void setup() {
   pinMode(7, OUTPUT);      // Green light
@@ -56,20 +59,7 @@ void setup() {
   slcd.print("Init ethernet");
   Serial.println("Initializing ethernet connection");
   Ethernet.begin(mac, ip);
-  
-  // Blinking
-  slcd.clear();
-  slcd.home();
-  slcd.print("Init LED");
-  Serial.println("Starting blink sequence");
-  ledSwitch( 1 );
-  delay(500);
-  ledSwitch( 0 );
-  delay(500);
-  ledSwitch( 1 );
-  delay(500);
-  ledSwitch( 0 );
-  
+    
   // Initializing DHT chip
   slcd.clear();
   slcd.home();
@@ -87,16 +77,31 @@ void setup() {
   slcd.clear();
   slcd.home();
   slcd.print("Starting server");
+
+  // Blinking
+  slcd.clear();
+  slcd.home();
+  slcd.print("Init LED sequence");
+  Serial.println("Starting blink sequence");
+  ledSwitch( 1 );
+  delay(500);
+  ledSwitch( 0 );
+  delay(500);
+  ledSwitch( 1 );
+  delay(500);
+  ledSwitch( 0 );
 }
 
 
 /**
  * Loop
  * - Listen for incoming connections
+ * - Read DHT 
  * - Read (get) request
  * - Switch next led
  */
-void loop() {
+void loop() {  
+
   // Listen for incoming clients
   EthernetClient client = server.available();
   String requestFirstLine = "";
@@ -105,32 +110,34 @@ void loop() {
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
   float h = dht.readHumidity();
   float t = dht.readTemperature();
-  
+
   if (isnan(t) || isnan(h)) {
     Serial.println("Failed to read from DHT");
   } else {
     stateTemperature = t;
     stateHumidity    = h;
 
-  // Dislay information on LCD
-  slcd.clear();
-  slcd.home();
-
+    // Dislay information on LCD
+    slcd.clear();
+    slcd.home();
   
-  if (stateLed == 1) {
-    slcd.print("L:1");
-  } else {
-    slcd.print("L:0");
-  }
-
-  slcd.print(" T:");
-  lcdDisplayFloat( stateTemperature ,1);
-  slcd.print(stateTemperature);
-
-  slcd.print(" H:");
-  lcdDisplayFloat( stateHumidity ,1);
-  slcd.setCursor(0,1);
-  slcd.print("");
+    // Display LED info
+    if (stateLed == 1) {
+      slcd.print("L:1");
+    } else {
+      slcd.print("L:0");
+    }
+  
+    // Display Temperature
+    slcd.print(" T:");
+    lcdDisplayFloat( stateTemperature ,1);
+    slcd.print(stateTemperature);
+  
+    // Display Humitidy
+    slcd.print(" H:");
+    lcdDisplayFloat( stateHumidity ,1);
+    slcd.setCursor(0,1);
+    slcd.print("");
   }
 
   if (client) {
@@ -221,7 +228,6 @@ void params(String requestFirstLine) {
 }
 
 
-
 /**
  * Switch LED on/off
  */
@@ -238,6 +244,9 @@ void ledSwitch( boolean state ) {
 }
 
 
+/**
+ * Output request body
+ */
 void output( EthernetClient client ) {
   // Led
   client.print("Led: ");
